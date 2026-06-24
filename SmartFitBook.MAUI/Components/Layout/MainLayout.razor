@@ -1,0 +1,278 @@
+﻿@using SmartFitBook.MAUI.Services
+@inherits LayoutComponentBase
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="app-layout">
+    <!-- هدر موبایلی -->
+    <div class="mobile-header">
+        <div class="header-top">
+            <div class="logo">
+                <img src="images/Bodybuilder-logo2.svg" alt="SmartFitBook" width="30" height="30">
+                <span class="logo-text">برنامه بدنسازی</span>
+            </div>
+            <div class="user-menu">
+                <img src="images/grey_avatar_2.svg" alt="Avatar" width="24" height="24">
+                <span class="user-name">@(AuthService.CurrentUser?.Username ?? "مهمان")</span>
+                @if (AuthService.CurrentUser != null)
+                {
+                    <button class="logout-icon" @onclick="Logout" title="خروج">🚪</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <main class="main-content">
+        <div class="content-wrapper">
+            @Body
+        </div>
+    </main>
+
+    <!-- فوتر -->
+    <footer class="app-footer">
+        <div class="footer-content">
+            <span class="designer-name">طراحی و توسعه توسط رضا مرادزاده</span>
+            <span class="separator">|</span>
+            <a href="tel:+989125663652" class="contact-link">
+                📞 ۰۹۱۲۵۶۶۳۶۵۲
+            </a>
+        </div>
+
+        <div class="social-icons">
+            <a href="https://wa.me/989125663652?text=Hi%20Reza%2C%20I%20need%20your%20help" target="_blank" class="social-icon whatsapp" title="واتساپ">
+                <img src="images/whatsapp-logo.svg" alt="WhatsApp" width="20" height="20">
+            </a>
+            <a href="https://t.me/reza_m2030?text=سلام%20رضا%20جان" target="_blank" class="social-icon telegram" title="تلگرام">
+                <img src="images/telegram-logo.svg" alt="Telegram" width="20" height="20">
+            </a>
+            <a href="https://ble.ir/@@reza_m2030" target="_blank" class="social-icon bale" title="بله">
+                <img src="images/bale-logo.svg" alt="Bale" width="20" height="20">
+            </a>
+        </div>
+        <div class="footer-note">
+            مربی بدنسازی
+        </div>
+    </footer>
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .app-layout {
+        min-height: 100vh;
+        background: #1a1a2e;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* هدر */
+    .mobile-header {
+        background: #0f0f1a;
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .logo-text {
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .user-menu {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 6px 14px;
+        border-radius: 30px;
+    }
+
+    .user-name {
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 500;
+        font-size: 13px;
+    }
+
+    .logout-icon {
+        background: none;
+        border: none;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 4px;
+        color: rgba(255, 255, 255, 0.6);
+        transition: color 0.2s;
+    }
+
+    .logout-icon:hover {
+        color: #ef4444;
+    }
+
+    .main-content {
+        flex: 1;
+    }
+
+    .content-wrapper {
+        padding: 20px;
+        min-height: calc(100vh - 140px);
+    }
+
+    /* فوتر */
+    .app-footer {
+        background: #0f0f1a;
+        padding: 16px 20px;
+        text-align: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .footer-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .designer-name {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 11px;
+    }
+
+    .separator {
+        color: rgba(255, 255, 255, 0.2);
+        font-size: 11px;
+    }
+
+    .contact-link {
+        color: #38ef7d;
+        font-size: 11px;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+    .contact-link:hover {
+        color: #64ffda;
+    }
+
+    /* آیکون‌های شبکه‌های اجتماعی */
+    .social-icons {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    .social-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        transition: all 0.2s;
+        opacity: 0.7;
+    }
+
+    .social-icon:hover {
+        opacity: 1;
+        transform: translateY(-2px);
+    }
+
+    .social-icon.whatsapp {
+        background: #25D366;
+    }
+
+    .social-icon.telegram {
+        background: #26A5E4;
+    }
+
+    .social-icon.bale {
+        background: #00AEEF;
+    }
+
+    .social-icon:active {
+        transform: translateY(0);
+    }
+
+    .footer-note {
+        color: rgba(255, 255, 255, 0.3);
+        font-size: 10px;
+    }
+
+    /* ریسپانسیو */
+    @@media (max-width: 480px) {
+        .mobile-header {
+            padding: 12px 16px;
+        }
+        
+        .logo-text {
+            font-size: 14px;
+        }
+        
+        .user-name {
+            font-size: 11px;
+        }
+        
+        .content-wrapper {
+            padding: 12px;
+        }
+        
+        .footer-content {
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .separator {
+            display: none;
+        }
+
+        .designer-name {
+            font-size: 10px;
+        }
+
+        .contact-link {
+            font-size: 10px;
+        }
+
+        .social-icons {
+            gap: 12px;
+        }
+
+        .social-icon {
+            width: 32px;
+            height: 32px;
+        }
+
+        .footer-note {
+            font-size: 9px;
+        }
+    }
+</style>
+
+@code {
+    private async void Logout()
+    {
+        AuthService.Logout();
+        Navigation.NavigateTo("/login", true);
+    }
+}

@@ -1,0 +1,695 @@
+﻿@page "/trainer/dashboard"
+@using System.Text.Json
+@using SmartFitBook.MAUI.Services
+@using SmartFitBook.MAUI.Models
+@inject AuthService AuthService
+@inject WorkoutService WorkoutService
+@inject NavigationManager Navigation
+
+<PageTitle>پیشخوان مربی | برنامه بدنسازی</PageTitle>
+
+<div class="trainer-container">
+    @if (AuthService.CurrentUser == null)
+    {
+        <div class="empty-state">
+            <div class="empty-icon">🔒</div>
+            <h3>لطفاً ابتدا وارد شوید</h3>
+            <button class="btn-primary-modern" @onclick="GoToLogin">ورود به حساب</button>
+        </div>
+        return;
+    }
+
+    <!-- محتوای اصلی -->
+    <div class="main-content">
+        <div class="row-mobile">
+            <!-- بخش شاگردان -->
+            <div class="col-students">
+                <div class="card-modern">
+                    <div class="card-header-modern">
+                        <div class="header-icon">📋</div>
+                        <h3>شاگردان من</h3>
+                        <span class="badge-count">@_trainees.Count</span>
+                    </div>
+                    <div class="card-body-modern">
+                        @if (_trainees.Any())
+                        {
+                            <div class="students-list">
+                                @foreach (var trainee in _trainees)
+                                {
+                                    <div class="student-item @(trainee.Username == _selectedTrainee ? "active" : "")"
+                                         @onclick="() => SelectTrainee(trainee.Username)">
+                                        <div class="student-avatar">👤</div>
+                                        <div class="student-info">
+                                            <div class="student-name">@trainee.Username</div>
+                                            @if (_traineeWorkouts.ContainsKey(trainee.Username))
+                                            {
+                                                var count = _traineeWorkouts[trainee.Username].Count;
+                                                <div class="student-badge">@count برنامه</div>
+                                            }
+                                        </div>
+                                        <div class="student-arrow">➡️</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-list">
+                                <div class="empty-icon">👥</div>
+                                <p>هنوز شاگردی ندارید</p>
+                            </div>
+                        }
+                        
+                        <button class="btn-primary-modern full-width mt-3" @onclick="GoToCreateStudent">
+                            ➕ افزودن شاگرد جدید
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- بخش برنامه‌های شاگرد -->
+            <div class="col-workouts">
+                @if (!string.IsNullOrEmpty(_selectedTrainee))
+                {
+                    <div class="card-modern">
+                        <div class="card-header-modern">
+                            <div class="header-icon">📅</div>
+                            <h3>برنامه‌های "@_selectedTrainee"</h3>
+                            <button class="btn-icon" @onclick="StartCreateWorkout" title="برنامه جدید">
+                                ➕
+                            </button>
+                        </div>
+                        <div class="card-body-modern">
+                            @if (_traineeWorkouts.ContainsKey(_selectedTrainee) && _traineeWorkouts[_selectedTrainee].Any())
+                            {
+                                <div class="workouts-toolbar">
+                                    <span>📋 @_traineeWorkouts[_selectedTrainee].Count برنامه</span>
+                                    <button class="btn-sm-modern" @onclick="SendAllActiveWorkouts">
+                                        📤 ارسال همه فعال
+                                    </button>
+                                </div>
+
+                                <div class="workouts-list">
+                                    @foreach (var workout in _traineeWorkouts[_selectedTrainee].OrderByDescending(w => w.StartDate))
+                                    {
+                                        <div class="workout-card">
+                                            <div class="workout-header">
+                                                <div class="workout-dates">
+                                                    <span class="date-start">📅 @workout.StartDate.ToString("yyyy/MM/dd")</span>
+                                                    <span class="date-arrow">→</span>
+                                                    <span class="date-end">@workout.StartDate.AddDays((workout.Weeks * 7) - 1).ToString("yyyy/MM/dd")</span>
+                                                </div>
+                                                <div class="workout-status">
+                                                    @if (workout.IsActive)
+                                                    {
+                                                        <span class="status-badge active">فعال</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="status-badge inactive">غیرفعال</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="workout-details">
+                                                <div class="detail-item">
+                                                    <span class="detail-icon">⏱️</span>
+                                                    <span>@workout.Weeks هفته</span>
+                                                </div>
+                                                <div class="detail-item">
+                                                    <span class="detail-icon">📆</span>
+                                                    <span>@string.Join(", ", workout.WeekDays.Select(GetDayName))</span>
+                                                </div>
+                                            </div>
+                                            <div class="workout-actions">
+                                                <button class="action-btn view" @onclick="() => ViewWorkout(workout.WorkoutId)" title="مشاهده">
+                                                    🔍 مشاهده
+                                                </button>
+                                                <button class="action-btn send" @onclick="() => ResendWorkout(workout)" title="ارسال مجدد">
+                                                    📤 ارسال
+                                                </button>
+                                                <button class="action-btn delete" @onclick="() => DeleteWorkout(workout.WorkoutId)" title="حذف">
+                                                    🗑️ حذف
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-list">
+                                    <div class="empty-icon">📭</div>
+                                    <p>@_selectedTrainee هیچ برنامه تمرینی ندارد</p>
+                                    <button class="btn-sm-modern mt-2" @onclick="StartCreateWorkout">
+                                        اولین برنامه را بسازید
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card-modern">
+                        <div class="card-header-modern">
+                            <div class="header-icon">👈</div>
+                            <h3>انتخاب شاگرد</h3>
+                        </div>
+                        <div class="card-body-modern">
+                            <div class="empty-list">
+                                <div class="empty-icon">👥</div>
+                                <p>لطفاً یک شاگرد از لیست سمت راست انتخاب کنید</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    .trainer-container {
+        min-height: 100vh;
+        background: #1a1a2e;
+    }
+    
+    /* محتوای اصلی */
+    .main-content {
+        padding: 20px;
+    }
+    
+    .row-mobile {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    @@media (min-width: 768px) {
+        .row-mobile {
+            flex-direction: row;
+        }
+        .col-students {
+            flex: 1;
+            min-width: 300px;
+        }
+        .col-workouts {
+            flex: 2;
+        }
+    }
+    
+    /* کارت‌ها */
+    .card-modern {
+        background: #0f0f1a;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 16px;
+    }
+    
+    .card-header-modern {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .header-icon {
+        font-size: 22px;
+    }
+    
+    .card-header-modern h3 {
+        flex: 1;
+        font-size: 16px;
+        color: white;
+        font-weight: 500;
+    }
+    
+    .badge-count {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+    }
+    
+    .btn-icon {
+        background: rgba(255, 255, 255, 0.08);
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 8px 12px;
+        border-radius: 12px;
+        color: white;
+        transition: all 0.2s;
+    }
+    
+    .btn-icon:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .card-body-modern {
+        padding: 16px;
+    }
+    
+    /* لیست شاگردان */
+    .students-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .student-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .student-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .student-item.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .student-avatar {
+        font-size: 28px;
+    }
+    
+    .student-info {
+        flex: 1;
+    }
+    
+    .student-name {
+        font-weight: 500;
+        font-size: 14px;
+        color: white;
+    }
+    
+    .student-badge {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .student-item.active .student-badge {
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .student-arrow {
+        font-size: 16px;
+        color: rgba(255, 255, 255, 0.4);
+    }
+    
+    /* لیست برنامه‌ها */
+    .workouts-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 13px;
+    }
+    
+    .workouts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 550px;
+        overflow-y: auto;
+    }
+    
+    .workout-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 12px;
+        transition: all 0.2s;
+    }
+    
+    .workout-card:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+    
+    .workout-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .workout-dates {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .date-start, .date-end {
+        font-weight: 500;
+    }
+    
+    .date-arrow {
+        color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .status-badge {
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-size: 10px;
+        font-weight: 500;
+    }
+    
+    .status-badge.active {
+        background: #10b981;
+        color: white;
+    }
+    
+    .status-badge.inactive {
+        background: #6b7280;
+        color: white;
+    }
+    
+    .workout-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    
+    .detail-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .detail-icon {
+        font-size: 12px;
+    }
+    
+    .workout-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+    
+    .action-btn {
+        padding: 5px 12px;
+        border: none;
+        border-radius: 20px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+    }
+    
+    .action-btn.view {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+    }
+    
+    .action-btn.view:hover {
+        background: rgba(59, 130, 246, 0.3);
+    }
+    
+    .action-btn.send {
+        background: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+    }
+    
+    .action-btn.send:hover {
+        background: rgba(16, 185, 129, 0.3);
+    }
+    
+    .action-btn.delete {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+    }
+    
+    .action-btn.delete:hover {
+        background: rgba(239, 68, 68, 0.3);
+    }
+    
+    .action-btn:hover {
+        transform: scale(1.02);
+    }
+    
+    /* دکمه‌ها */
+    .btn-primary-modern {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .btn-primary-modern:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+    
+    .btn-primary-modern:active {
+        transform: scale(0.98);
+    }
+    
+    .btn-sm-modern {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 20px;
+        font-size: 11px;
+        cursor: pointer;
+    }
+    
+    .full-width {
+        width: 100%;
+    }
+    
+    /* حالت خالی */
+    .empty-list {
+        text-align: center;
+        padding: 40px 20px;
+    }
+    
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+        opacity: 0.4;
+    }
+    
+    .empty-list p {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 13px;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 50px 20px;
+    }
+    
+    /* اسکرول‌بار */
+    .students-list::-webkit-scrollbar,
+    .workouts-list::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    .students-list::-webkit-scrollbar-track,
+    .workouts-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+    }
+    
+    .students-list::-webkit-scrollbar-thumb,
+    .workouts-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+    }
+    
+    /* ریسپانسیو */
+    @@media (max-width: 480px) {
+        .main-content {
+            padding: 12px;
+        }
+        
+        .card-header-modern {
+            padding: 12px 16px;
+        }
+        
+        .card-header-modern h3 {
+            font-size: 14px;
+        }
+        
+        .student-name {
+            font-size: 13px;
+        }
+        
+        .workout-dates {
+            font-size: 10px;
+        }
+    }
+</style>
+
+@code {
+    private List<User> _trainees = new();
+    private string _selectedTrainee = "";
+    private int _weeks = 4;
+    private List<string> _allDays = new() { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+    private List<string> _selectedDays = new();
+    private Dictionary<string, List<WorkoutPlan>> _traineeWorkouts = new();
+    private Dictionary<string, string> _persianDays = new()
+    {
+        { "Monday", "دوشنبه" },
+        { "Tuesday", "سه‌شنبه" },
+        { "Wednesday", "چهارشنبه" },
+        { "Thursday", "پنج‌شنبه" },
+        { "Friday", "جمعه" },
+        { "Saturday", "شنبه" },
+        { "Sunday", "یکشنبه" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrainees();
+    }
+
+    private async Task LoadTrainees()
+    {
+        _trainees = await AuthService.GetMyTraineesAsync();
+        await LoadAllTraineeWorkouts();
+        StateHasChanged();
+    }
+
+    private async Task LoadAllTraineeWorkouts()
+    {
+        _traineeWorkouts.Clear();
+        foreach (var trainee in _trainees)
+        {
+            var workouts = await WorkoutService.GetWorkoutsByTraineeAsync(trainee.Username, false);
+            _traineeWorkouts[trainee.Username] = workouts;
+        }
+    }
+
+    private async Task SelectTrainee(string username)
+    {
+        _selectedTrainee = username;
+        if (!_traineeWorkouts.ContainsKey(username))
+        {
+            var workouts = await WorkoutService.GetWorkoutsByTraineeAsync(username, false);
+            _traineeWorkouts[username] = workouts;
+        }
+        StateHasChanged();
+    }
+
+    private string GetDayName(string day)
+    {
+        return _persianDays.ContainsKey(day) ? _persianDays[day] : day;
+    }
+
+    private void StartCreateWorkout()
+    {
+        if (string.IsNullOrEmpty(_selectedTrainee))
+        {
+            App.Current!.MainPage!.DisplayAlert("خطا", "لطفاً ابتدا یک شاگرد انتخاب کنید", "باشه");
+            return;
+        }
+        Navigation.NavigateTo($"/trainer/create-workout?trainee={Uri.EscapeDataString(_selectedTrainee)}");
+    }
+
+    private void ViewWorkout(string workoutId)
+    {
+        Navigation.NavigateTo($"/trainee/view-workout/{workoutId}");
+    }
+
+    private async Task DeleteWorkout(string workoutId)
+    {
+        var confirm = await App.Current!.MainPage!.DisplayAlert("تأیید حذف", "آیا از حذف این برنامه اطمینان دارید؟", "بله، حذف شود", "انصراف");
+        if (!confirm) return;
+        
+        var success = await WorkoutService.DeleteWorkoutAsync(workoutId);
+        if (success)
+        {
+            if (_traineeWorkouts.ContainsKey(_selectedTrainee))
+            {
+                var workout = _traineeWorkouts[_selectedTrainee].FirstOrDefault(w => w.WorkoutId == workoutId);
+                if (workout != null) _traineeWorkouts[_selectedTrainee].Remove(workout);
+            }
+            StateHasChanged();
+            await App.Current!.MainPage!.DisplayAlert("حذف شد", "برنامه با موفقیت حذف شد", "باشه");
+        }
+    }
+
+    private async Task ResendWorkout(WorkoutPlan workout)
+    {
+        var json = WorkoutService.ExportWorkoutToJson(workout);
+        var fileName = $"workout_{workout.TraineeUsername}_{workout.StartDate:yyyyMMdd}.json";
+        var filePath = Path.Combine(FileSystem.AppDataDirectory, fileName);
+        await File.WriteAllTextAsync(filePath, json);
+        
+        var result = await App.Current!.MainPage!.DisplayAlert("✅ فایل ذخیره شد", $"فایل برنامه با نام '{fileName}' در حافظه گوشی ذخیره شد.\n\nآیا مایل به ارسال فایل هستید؟", "بله، ارسال کن", "بعداً ارسال می‌کنم");
+        
+        if (result)
+        {
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = $"برنامه تمرینی {workout.TraineeUsername} - شروع {workout.StartDate:yyyy/MM/dd}",
+                File = new ShareFile(filePath)
+            });
+        }
+    }
+
+    private async Task SendAllActiveWorkouts()
+    {
+        if (!_traineeWorkouts.ContainsKey(_selectedTrainee)) return;
+        var activeWorkouts = _traineeWorkouts[_selectedTrainee].Where(w => w.IsActive).ToList();
+        if (!activeWorkouts.Any())
+        {
+            await App.Current!.MainPage!.DisplayAlert("اطلاع", "هیچ برنامه فعالی برای ارسال وجود ندارد", "باشه");
+            return;
+        }
+        
+        var allPlans = new { TraineeUsername = _selectedTrainee, ExportedDate = DateTime.Now, Workouts = activeWorkouts.Select(w => new { w.WorkoutId, w.StartDate, w.Weeks, w.WeekDays, w.Schedule, w.CreatedAt }) };
+        var json = JsonSerializer.Serialize(allPlans, new JsonSerializerOptions { WriteIndented = true });
+        var fileName = $"all_workouts_{_selectedTrainee}_{DateTime.Now:yyyyMMdd}.json";
+        var filePath = Path.Combine(FileSystem.AppDataDirectory, fileName);
+        await File.WriteAllTextAsync(filePath, json);
+        await Share.Default.RequestAsync(new ShareFileRequest { Title = $"همه برنامه‌های {_selectedTrainee}", File = new ShareFile(filePath) });
+    }
+
+    private void GoToLogin() => Navigation.NavigateTo("/login");
+    private void GoToCreateStudent() => Navigation.NavigateTo("/trainer/create-student");
+    private async void Logout()
+    {
+        AuthService.Logout();
+        Navigation.NavigateTo("/login");
+    }
+}

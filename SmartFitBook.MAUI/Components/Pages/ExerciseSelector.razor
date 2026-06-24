@@ -1,0 +1,695 @@
+﻿@using SmartFitBook.MAUI.Models
+@using SmartFitBook.MAUI.Services
+@inject DataService DataService
+
+<div class="exercise-selector-container">
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner-modern"></div>
+            <p>@_loadingMessage</p>
+        </div>
+    }
+    else if (_allExercises.Any())
+    {
+        <!-- فیلترها -->
+        <div class="filter-section">
+            <div class="filter-grid">
+                <div class="filter-item full-width">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" 
+                               value="@_searchTerm"
+                               @oninput="OnSearchInput"
+                               class="search-input" 
+                               placeholder="جستجو در نام حرکت، عضله یا تجهیزات..." />
+                    </div>
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">💪 عضله هدف</label>
+                    <select value="@_selectedMuscle"
+                            @onchange="OnMuscleChange"
+                            class="filter-select">
+                        <option value="">همه عضلات</option>
+                        @foreach (var muscle in _realMuscles.Take(30))
+                        {
+                            <option value="@muscle">@GetMuscleDisplayName(muscle)</option>
+                        }
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">🦵 قسمت بدن</label>
+                    <select value="@_selectedBodyPart"
+                            @onchange="OnBodyPartChange"
+                            class="filter-select">
+                        <option value="">همه قسمت‌ها</option>
+                        @foreach (var bodyPart in _bodyParts)
+                        {
+                            <option value="@bodyPart">@GetBodyPartDisplayName(bodyPart)</option>
+                        }
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">🛠️ تجهیزات</label>
+                    <select value="@_selectedEquipment"
+                            @onchange="OnEquipmentChange"
+                            class="filter-select">
+                        <option value="">همه تجهیزات</option>
+                        @foreach (var equip in _equipments)
+                        {
+                            <option value="@equip">@GetEquipmentDisplayName(equip)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(_selectedMuscle) && _filteredExercises.Count == 0 && !_isLoading)
+            {
+                <div class="filter-warning">
+                    ⚠️ هیچ حرکتی با عضله "@GetMuscleDisplayName(_selectedMuscle)" یافت نشد
+                </div>
+            }
+        </div>
+
+        <!-- آمار -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-icon">📊</span>
+                <span class="stat-value">@_allExercises.Count</span>
+                <span class="stat-label">کل حرکات</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-icon">🎯</span>
+                <span class="stat-value">@_filteredExercises.Count</span>
+                <span class="stat-label">نمایش</span>
+            </div>
+        </div>
+
+        <!-- گرید حرکات -->
+        @if (_filteredExercises.Any())
+        {
+            <div class="exercises-grid">
+                @foreach (var exercise in _filteredExercises.Take(100))
+                {
+                    <div class="exercise-card" @onclick="() => OnExerciseSelected.InvokeAsync(exercise)">
+                        <div class="card-media">
+                            @if (!string.IsNullOrEmpty(exercise.GifFileName))
+                            {
+                                <img class="card-gif" 
+                                     src="@($"media/{exercise.GifFileName}")" 
+                                     alt="@exercise.Name"
+                                     loading="lazy"
+                                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%25\' height=\'100%25\'%3E%3Crect width=\'100%25\' height=\'100%25\' fill=\'%23333\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23fff\'%3E🎬%3C/text%3E%3C/svg%3E'" />
+                            }
+                            else
+                            {
+                                <div class="card-placeholder">🏋️</div>
+                            }
+                        </div>
+                        <div class="card-info">
+                            <div class="card-title" title="@exercise.Name">@exercise.Name</div>
+                            <div class="card-tags">
+                                @foreach (var muscle in exercise.TargetMuscles.Take(2))
+                                {
+                                    <span class="tag">@GetMuscleDisplayName(muscle)</span>
+                                }
+                                @if (exercise.Equipments.Any())
+                                {
+                                    <span class="tag equip">@GetEquipmentDisplayName(exercise.Equipments.First())</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-icon">🔍</div>
+                <h4>حرکتی یافت نشد</h4>
+                <p>سعی کنید فیلترهای دیگری انتخاب کنید</p>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="error-state">
+            <div class="error-icon">⚠️</div>
+            <h4>خطا در بارگذاری حرکات</h4>
+            <p>@_errorMessage</p>
+            <button class="retry-btn" @onclick="RetryLoad">تلاش مجدد</button>
+        </div>
+    }
+</div>
+
+<style>
+    /* استایل‌ها به همان شکل قبلی保持不变 */
+    .exercise-selector-container {
+        background: #0f0f1a;
+        border-radius: 20px;
+        padding: 16px;
+    }
+    
+    .loading-state {
+        text-align: center;
+        padding: 50px 20px;
+    }
+    
+    .spinner-modern {
+        width: 40px;
+        height: 40px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        border-top: 2px solid #667eea;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 16px;
+    }
+    
+    .loading-state p {
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .filter-section {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .filter-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    @@media (min-width: 768px) {
+        .filter-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+        .filter-item.full-width {
+            grid-column: span 3;
+        }
+    }
+    
+    .search-box {
+        position: relative;
+    }
+    
+    .search-icon {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 16px;
+        color: rgba(255, 255, 255, 0.4);
+    }
+    
+    .search-input {
+        width: 100%;
+        padding: 12px 40px 12px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        font-size: 14px;
+        background: rgba(255, 255, 255, 0.05);
+        transition: all 0.2s;
+        color: white;
+    }
+    
+    .search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        background: rgba(255, 255, 255, 0.08);
+    }
+    
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+    
+    .filter-label {
+        display: block;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 6px;
+    }
+    
+    .filter-select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        font-size: 13px;
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+    
+    .filter-select option {
+        background: #0f0f1a;
+    }
+    
+    .filter-select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    .filter-warning {
+        margin-top: 12px;
+        padding: 8px 12px;
+        background: rgba(245, 158, 11, 0.15);
+        border-radius: 10px;
+        font-size: 12px;
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    
+    .stats-bar {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 12px 20px;
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .stat-icon {
+        font-size: 18px;
+    }
+    
+    .stat-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: white;
+    }
+    
+    .stat-label {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .stat-divider {
+        width: 1px;
+        height: 30px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .exercises-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 4px;
+    }
+    
+    @@media (min-width: 480px) {
+        .exercises-grid {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        }
+    }
+    
+    @@media (min-width: 768px) {
+        .exercises-grid {
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        }
+    }
+    
+    .exercise-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .exercise-card:hover {
+        transform: translateY(-3px);
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    
+    .card-media {
+        width: 100%;
+        height: 130px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .card-gif {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center;
+        background-color: #0f0f1a;
+    }
+    
+    .card-placeholder {
+        font-size: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .card-info {
+        padding: 10px;
+    }
+    
+    .card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 6px;
+    }
+    
+    .card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .tag {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.8);
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 9px;
+        font-weight: 500;
+    }
+    
+    .tag.equip {
+        background: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+    }
+    
+    .empty-state, .error-state {
+        text-align: center;
+        padding: 50px 20px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .empty-icon, .error-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+    
+    .empty-state h4, .error-state h4 {
+        font-size: 16px;
+        color: white;
+        margin-bottom: 8px;
+    }
+    
+    .empty-state p, .error-state p {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .retry-btn {
+        margin-top: 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 30px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    
+    .exercises-grid::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    .exercises-grid::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+    }
+    
+    .exercises-grid::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+    }
+    
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback<Exercise> OnExerciseSelected { get; set; }
+
+    private List<Exercise> _allExercises = new();
+    private List<Exercise> _filteredExercises = new();
+    private List<string> _realMuscles = new();
+    private List<string> _bodyParts = new();
+    private List<string> _equipments = new();
+    private bool _isLoading = true;
+    private string _loadingMessage = "در حال بارگذاری...";
+    private string _errorMessage = "";
+
+    private string _searchTerm = "";
+    private string _selectedMuscle = "";
+    private string _selectedBodyPart = "";
+    private string _selectedEquipment = "";
+
+    // دیکشنری ترجمه عضلات
+    private Dictionary<string, string> _muscleTranslations = new()
+    {
+        { "biceps", "دوسر بازو (Biceps)" },
+        { "triceps", "سه سر بازو (Triceps)" },
+        { "chest", "سینه (Chest)" },
+        { "shoulders", "شانه (Shoulders)" },
+        { "back", "پشت (Back)" },
+        { "lats", "زپه (Lats)" },
+        { "traps", "ذوزنقه (Traps)" },
+        { "abs", "شکم (Abs)" },
+        { "glutes", "سرین (Glutes)" },
+        { "quads", "چهارسر ران (Quads)" },
+        { "hamstrings", "همسترینگ (Hamstrings)" },
+        { "calves", "ساق پا (Calves)" },
+        { "forearms", "ساعد (Forearms)" },
+        { "delts", "دلتوئید (Delts)" },
+        { "core", "مرکزی (Core)" },
+        { "obliques", "مایل شکم (Obliques)" },
+        { "lower back", "کمر (Lower Back)" },
+        { "upper back", "پشت بالا (Upper Back)" },
+        { "pectorals", "سینه (Pectorals)" },
+        { "abdominals", "شکم (Abdominals)" },
+        { "hip flexors", "فلکسورهای لگن (Hip Flexors)" },
+        { "adductors", "اداکتورها (Adductors)" },
+        { "abductors", "ابداکتورها (Abductors)" },
+        { "trapezius", "ذوزنقه (Trapezius)" },
+        { "rhomboids", "لوزی (Rhomboids)" },
+        { "quadriceps", "چهارسر ران (Quadriceps)" },
+        { "deltoids", "دلتوئید (Deltoids)" },
+        { "latissimus dorsi", "زپه (Latissimus Dorsi)" },
+        { "serratus anterior", "دندانه‌ای (Serratus Anterior)" },
+        { "levator scapulae", "بالابرنده کتف (Levator Scapulae)" },
+        { "soleus", "نعلی (Soleus)" },
+        { "brachialis", "بازویی (Brachialis)" },
+        { "wrist flexors", "فلکسورهای مچ (Wrist Flexors)" },
+        { "wrist extensors", "اکستنسورهای مچ (Wrist Extensors)" },
+        { "rotator cuff", "کلاهک چرخان (Rotator Cuff)" },
+        { "spine", "ستون فقرات (Spine)" },
+        { "cardiovascular system", "قلبی-عروقی (Cardiovascular)" }
+    };
+
+    // دیکشنری ترجمه قسمت‌های بدن
+    private Dictionary<string, string> _bodyPartTranslations = new()
+    {
+        { "neck", "گردن (Neck)" },
+        { "lower arms", "ساعد (Lower Arms)" },
+        { "upper arms", "بازو (Upper Arms)" },
+        { "shoulders", "شانه (Shoulders)" },
+        { "chest", "سینه (Chest)" },
+        { "back", "پشت (Back)" },
+        { "waist", "کمر (Waist)" },
+        { "upper legs", "ران (Upper Legs)" },
+        { "lower legs", "ساق پا (Lower Legs)" },
+        { "cardio", "قلبی-عروقی (Cardio)" }
+    };
+
+    // دیکشنری ترجمه تجهیزات
+    private Dictionary<string, string> _equipmentTranslations = new()
+    {
+        { "barbell", "هالتر (Barbell)" },
+        { "dumbbell", "دمبل (Dumbbell)" },
+        { "kettlebell", "کتل بل (Kettlebell)" },
+        { "cable", "سیم کش (Cable)" },
+        { "body weight", "وزن بدن (Body Weight)" },
+        { "band", "کش مقاومتی (Band)" },
+        { "resistance band", "کش مقاومتی (Resistance Band)" },
+        { "smith machine", "دستگاه اسمیت (Smith Machine)" },
+        { "leverage machine", "دستگاه اهرمی (Leverage Machine)" },
+        { "stability ball", "توپ تعادلی (Stability Ball)" },
+        { "medicine ball", "توپ پزشکی (Medicine Ball)" },
+        { "bosu ball", "توپ بوسو (Bosu Ball)" },
+        { "ez barbell", "هالتر ای زی (EZ Barbell)" },
+        { "trap bar", "هالتر شش گوش (Trap Bar)" },
+        { "sled machine", "دستگاه سورتمه (Sled Machine)" },
+        { "stationary bike", "دوچرخه ثابت (Stationary Bike)" },
+        { "elliptical machine", "دستگاه بیضوی (Elliptical Machine)" },
+        { "stepmill machine", "استپ میل (Stepmill Machine)" },
+        { "rope", "طناب (Rope)" },
+        { "hammer", "چکش (Hammer)" },
+        { "tire", "لاستیک (Tire)" },
+        { "roller", "غلتک (Roller)" },
+        { "wheel roller", "چرخ غلتکی (Wheel Roller)" },
+        { "weighted", "با وزنه (Weighted)" },
+        { "assisted", "کمکی (Assisted)" },
+        { "olympic barbell", "هالتر المپیک (Olympic Barbell)" },
+        { "upper body ergometer", "ارگومتر بالاتنه (Upper Body Ergometer)" },
+        { "skierg machine", "اسکی ارگ (SkiErg Machine)" }
+    };
+
+    private string GetMuscleDisplayName(string muscle)
+    {
+        if (_muscleTranslations.ContainsKey(muscle.ToLower()))
+            return _muscleTranslations[muscle.ToLower()];
+        return muscle;
+    }
+
+    private string GetBodyPartDisplayName(string bodyPart)
+    {
+        if (_bodyPartTranslations.ContainsKey(bodyPart.ToLower()))
+            return _bodyPartTranslations[bodyPart.ToLower()];
+        return bodyPart;
+    }
+
+    private string GetEquipmentDisplayName(string equipment)
+    {
+        if (_equipmentTranslations.ContainsKey(equipment.ToLower()))
+            return _equipmentTranslations[equipment.ToLower()];
+        return equipment;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            _isLoading = true;
+            StateHasChanged();
+            
+            _allExercises = await DataService.GetAllExercisesAsync();
+            
+            _realMuscles = _allExercises
+                .SelectMany(e => e.TargetMuscles)
+                .Distinct()
+                .OrderBy(m => m)
+                .ToList();
+            
+            _bodyParts = await DataService.GetBodyPartsAsync();
+            _equipments = await DataService.GetEquipmentsAsync();
+            
+            _filteredExercises = _allExercises.ToList();
+            
+            _isLoading = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RetryLoad()
+    {
+        await LoadData();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void OnMuscleChange(ChangeEventArgs e)
+    {
+        _selectedMuscle = e.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void OnBodyPartChange(ChangeEventArgs e)
+    {
+        _selectedBodyPart = e.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void OnEquipmentChange(ChangeEventArgs e)
+    {
+        _selectedEquipment = e.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (_isLoading || !_allExercises.Any()) return;
+        
+        var result = _allExercises.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            var term = _searchTerm.ToLower();
+            result = result.Where(e =>
+                e.Name.ToLower().Contains(term) ||
+                e.TargetMuscles.Any(m => m.ToLower().Contains(term)) ||
+                e.Equipments.Any(eq => eq.ToLower().Contains(term))
+            );
+        }
+
+        if (!string.IsNullOrEmpty(_selectedMuscle))
+        {
+            result = result.Where(e =>
+                e.TargetMuscles.Contains(_selectedMuscle, StringComparer.OrdinalIgnoreCase)
+            );
+        }
+
+        if (!string.IsNullOrEmpty(_selectedBodyPart))
+        {
+            result = result.Where(e =>
+                e.BodyParts.Contains(_selectedBodyPart, StringComparer.OrdinalIgnoreCase)
+            );
+        }
+
+        if (!string.IsNullOrEmpty(_selectedEquipment))
+        {
+            result = result.Where(e =>
+                e.Equipments.Contains(_selectedEquipment, StringComparer.OrdinalIgnoreCase)
+            );
+        }
+
+        _filteredExercises = result.ToList();
+        InvokeAsync(StateHasChanged);
+    }
+}

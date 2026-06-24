@@ -1,0 +1,398 @@
+﻿@page "/trainer/create-student"
+@using SmartFitBook.MAUI.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>ایجاد شاگرد جدید | برنامه بدنسازی</PageTitle>
+
+<div class="create-student-container">
+    <!-- هدر با دکمه بازگشت -->
+    <div class="page-header">
+        <button class="back-btn" @onclick="Cancel">
+            <span>←</span> بازگشت
+        </button>
+        <h2>👤 ایجاد شاگرد جدید</h2>
+    </div>
+
+    <div class="form-card">
+        <div class="card-icon">👥</div>
+        <p class="card-subtitle">اطلاعات شاگرد جدید را وارد کنید</p>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @(_isSuccess ? "alert-success" : "alert-error")">
+                <span class="alert-icon">@(_isSuccess ? "✅" : "❌")</span>
+                <span>@_message</span>
+            </div>
+        }
+
+        <div class="form-group">
+            <label class="form-label">👤 نام کاربری</label>
+            <input type="text"
+                   @bind="_username"
+                   @bind:event="oninput"
+                   class="modern-input"
+                   placeholder="مثلاً: ali.rezaei" />
+            <div class="input-hint">نام کاربری باید یکتا باشد</div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">🔒 رمز عبور</label>
+            <input type="password"
+                   @bind="_password"
+                   @bind:event="oninput"
+                   class="modern-input"
+                   placeholder="رمز عبور را وارد کنید" />
+            <div class="input-hint">حداقل 4 کاراکتر</div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">🔒 تأیید رمز عبور</label>
+            <input type="password"
+                   @bind="_confirmPassword"
+                   @bind:event="oninput"
+                   class="modern-input"
+                   placeholder="رمز عبور را دوباره وارد کنید" />
+        </div>
+
+        <div class="button-group">
+            <button class="btn-cancel" @onclick="Cancel">
+                ↩️ انصراف
+            </button>
+            <button class="btn-create" @onclick="CreateStudentAsync" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <div class="spinner-small"></div>
+                    <span>در حال ایجاد...</span>
+                }
+                else
+                {
+                    <span>✅ ایجاد شاگرد</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .create-student-container {
+        min-height: 100vh;
+        background: #1a1a2e;
+        padding: 20px;
+        position: relative;
+    }
+
+    /* هدر */
+    .page-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .back-btn {
+        background: #0f0f1a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 10px 18px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+        color: white;
+    }
+
+    .back-btn:hover {
+        transform: translateX(-3px);
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .page-header h2 {
+        font-size: 22px;
+        color: white;
+        font-weight: 600;
+    }
+
+    /* کارت فرم */
+    .form-card {
+        background: #0f0f1a;
+        border-radius: 24px;
+        padding: 32px 24px;
+        max-width: 480px;
+        margin: 0 auto;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .card-icon {
+        font-size: 64px;
+        text-align: center;
+        margin-bottom: 16px;
+    }
+
+    .card-subtitle {
+        text-align: center;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 14px;
+        margin-bottom: 28px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* فرم گروه */
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 8px;
+    }
+
+    .modern-input {
+        width: 100%;
+        padding: 14px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        font-size: 15px;
+        transition: all 0.3s;
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+
+    .modern-input:focus {
+        outline: none;
+        border-color: #667eea;
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .modern-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 14px;
+    }
+
+    .input-hint {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.4);
+        margin-top: 6px;
+        margin-right: 4px;
+    }
+
+    /* دکمه‌ها */
+    .button-group {
+        display: flex;
+        gap: 12px;
+        margin-top: 28px;
+    }
+
+    .btn-cancel {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        padding: 14px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .btn-cancel:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-create {
+        flex: 1;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 14px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .btn-create:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-create:active {
+        transform: translateY(0);
+    }
+
+    .btn-create:disabled {
+        opacity: 0.7;
+        transform: none;
+        cursor: not-allowed;
+    }
+
+    /* اسپینر کوچک */
+    .spinner-small {
+        width: 18px;
+        height: 18px;
+        border: 2px solid white;
+        border-top: 2px solid transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    /* آلرت */
+    .alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        font-size: 14px;
+    }
+
+    .alert-success {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .alert-error {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .alert-icon {
+        font-size: 18px;
+    }
+
+    /* انیمیشن‌ها */
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* ریسپانسیو */
+    @@media (max-width: 480px) {
+        .create-student-container {
+            padding: 16px;
+        }
+
+        .form-card {
+            padding: 24px 20px;
+        }
+
+        .card-icon {
+            font-size: 48px;
+        }
+
+        .page-header h2 {
+            font-size: 18px;
+        }
+
+        .modern-input {
+            padding: 12px 14px;
+            font-size: 14px;
+        }
+
+        .btn-cancel, .btn-create {
+            padding: 12px;
+        }
+    }
+
+    @@media (min-width: 768px) {
+        .form-card {
+            padding: 40px 32px;
+        }
+    }
+</style>
+
+@code {
+    private string _username = "";
+    private string _password = "";
+    private string _confirmPassword = "";
+    private string _message = "";
+    private bool _isSuccess = false;
+    private bool _isLoading = false;
+
+    private async Task CreateStudentAsync()
+    {
+        // اعتبارسنجی
+        if (string.IsNullOrWhiteSpace(_username))
+        {
+            _message = "لطفاً نام کاربری را وارد کنید";
+            _isSuccess = false;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_password))
+        {
+            _message = "لطفاً رمز عبور را وارد کنید";
+            _isSuccess = false;
+            return;
+        }
+
+        if (_password != _confirmPassword)
+        {
+            _message = "رمز عبور و تأیید آن مطابقت ندارند";
+            _isSuccess = false;
+            return;
+        }
+
+        if (_password.Length < 4)
+        {
+            _message = "رمز عبور باید حداقل 4 کاراکتر باشد";
+            _isSuccess = false;
+            return;
+        }
+
+        _isLoading = true;
+        _message = "";
+
+        var success = await AuthService.CreateTraineeAsync(_username, _password, AuthService.CurrentUser!.Username);
+
+        if (success)
+        {
+            _message = $"✅ شاگرد '{_username}' با موفقیت ایجاد شد!";
+            _isSuccess = true;
+            _username = "";
+            _password = "";
+            _confirmPassword = "";
+
+            await Task.Delay(1500);
+            Navigation.NavigateTo("/trainer/dashboard");
+        }
+        else
+        {
+            _message = "❌ این نام کاربری قبلاً ثبت شده است";
+            _isSuccess = false;
+        }
+
+        _isLoading = false;
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/trainer/dashboard");
+    }
+}

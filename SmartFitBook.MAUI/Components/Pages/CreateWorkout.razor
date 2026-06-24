@@ -1,0 +1,1070 @@
+﻿@page "/trainer/create-workout"
+@using SmartFitBook.MAUI.Services
+@using SmartFitBook.MAUI.Models
+@inject AuthService AuthService
+@inject WorkoutService WorkoutService
+@inject DataService DataService
+@inject NavigationManager Navigation
+
+<PageTitle>ساخت برنامه تمرینی | برنامه بدنسازی</PageTitle>
+
+<div class="create-workout-container">
+    <!-- هدر -->
+    <div class="page-header">
+        <button class="back-btn" @onclick="GoBack">
+            <span>←</span> بازگشت
+        </button>
+        <h2>📝 ساخت برنامه تمرینی جدید</h2>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_traineeName))
+    {
+        <!-- کارت اطلاعات شاگرد -->
+        <div class="info-card">
+            <div class="info-row">
+                <span class="info-label">👤 شاگرد:</span>
+                <span class="info-value">@_traineeName</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">📅 تاریخ شروع:</span>
+                <span class="info-value">@_startDate.ToString("yyyy/MM/dd")</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">⏱️ مدت:</span>
+                <span class="info-value">@_weeksCount هفته</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">📆 روزهای تمرین:</span>
+                <span class="info-value">@string.Join(", ", _weekDays.Select(GetDayName))</span>
+            </div>
+        </div>
+
+        <!-- بخش تنظیمات برنامه -->
+        <div class="settings-card">
+            <div class="card-title">⚙️ تنظیمات برنامه</div>
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label class="setting-label">📅 تاریخ شروع</label>
+                    <input type="date" @bind="_startDate" @bind:format="yyyy-MM-dd" class="modern-input" />
+                </div>
+                <div class="setting-item">
+                    <label class="setting-label">⏱️ تعداد هفته‌ها</label>
+                    <select @bind="_weeksCount" class="modern-select">
+                        <option value="4">4 هفته</option>
+                        <option value="6">6 هفته</option>
+                        <option value="8">8 هفته</option>
+                        <option value="12">12 هفته</option>
+                        <option value="16">16 هفته</option>
+                        <option value="20">20 هفته</option>
+                        <option value="24">24 هفته (6 ماه)</option>
+                        <option value="52">52 هفته (1 سال)</option>
+                    </select>
+                </div>
+                <div class="setting-item full-width">
+                    <label class="setting-label">📆 روزهای تمرین</label>
+                    <div class="days-grid">
+                        @foreach (var day in _allDays)
+                        {
+                            <label class="day-checkbox">
+                                <input type="checkbox" 
+                                       value="@day" 
+                                       checked="@_weekDays.Contains(day)" 
+                                       @onchange="(ChangeEventArgs e) => ToggleDay(day, e.Value is bool isChecked && isChecked)" />
+                                <span>@GetDayName(day)</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- بخش اصلی: روزها و حرکات -->
+        <div class="main-workout-row">
+            <!-- لیست روزها -->
+            <div class="days-sidebar">
+                <div class="sidebar-title">📅 روزهای تمرین</div>
+                <div class="days-list">
+                    @foreach (var day in _weekDays)
+                    {
+                        <div class="day-item @(day == _selectedDay ? "active" : "")"
+                             @onclick="() => SelectDay(day)">
+                            <span class="day-name">@GetDayName(day)</span>
+                            <span class="day-count">@(_plan.Schedule.ContainsKey(day) ? _plan.Schedule[day].Count : 0)</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- حرکات روز انتخاب شده -->
+            <div class="exercises-content">
+                @if (!string.IsNullOrEmpty(_selectedDay))
+                {
+                    <div class="exercises-card">
+                        <div class="exercises-header">
+                            <span>🏋️‍♂️ حرکات روز @GetDayName(_selectedDay)</span>
+                            <button class="add-exercise-btn" @onclick="() => _showExerciseSelector = true">
+                                + افزودن حرکت
+                            </button>
+                        </div>
+                        <div class="exercises-list">
+                            @if (_plan.Schedule.ContainsKey(_selectedDay) && _plan.Schedule[_selectedDay].Any())
+                            {
+                                @foreach (var item in _plan.Schedule[_selectedDay].Select((value, index) => new { value, index }))
+                                {
+                                    <div class="exercise-item">
+                                        <div class="exercise-info">
+                                            <div class="exercise-thumb">
+                                                @if (!string.IsNullOrEmpty(item.value.GifFileName))
+                                                {
+                                                    <img src="@($"media/{item.value.GifFileName}")" 
+                                                         alt="@item.value.Name"
+                                                         class="exercise-thumb-img" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="exercise-thumb-placeholder">🏋️</div>
+                                                }
+                                            </div>
+                                            <div class="exercise-details">
+                                                <div class="exercise-name">@item.value.Name</div>
+                                                <div class="exercise-stats">
+                                                    ست: @item.value.Sets | تکرار: @item.value.Reps | استراحت: @item.value.RestSeconds ثانیه
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(item.value.TrainerNote))
+                                                {
+                                                    <div class="exercise-note">📝 @item.value.TrainerNote</div>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="exercise-actions">
+                                            <button class="action-edit" @onclick="() => EditExercise(item.index)" title="ویرایش">✏️</button>
+                                            <button class="action-delete" @onclick="() => RemoveExercise(item.index)" title="حذف">🗑️</button>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="empty-exercises">
+                                    <div class="empty-icon">🏋️</div>
+                                    <p>هنوز حرکتی برای این روز اضافه نشده است</p>
+                                    <button class="add-exercise-btn empty" @onclick="() => _showExerciseSelector = true">
+                                        + افزودن حرکت
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- دکمه‌های ذخیره -->
+                <div class="save-actions">
+                    <button class="save-btn" @onclick="SaveWorkout" disabled="@_isSaving">
+                        💾 ذخیره برنامه
+                    </button>
+                    <button class="share-btn" @onclick="ExportAndShare" disabled="@_isSaving">
+                        📤 ارسال برای شاگرد
+                    </button>
+                </div>
+                <div class="save-hint">
+                    برنامه برای تاریخ @_startDate.ToString("yyyy/MM/dd") شروع می‌شود
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="error-card">
+            <div class="error-icon">⚠️</div>
+            <h3>اطلاعات کافی برای ساخت برنامه وجود ندارد</h3>
+            <button class="back-btn-primary" @onclick="GoBack">بازگشت به داشبورد</button>
+        </div>
+    }
+
+    <!-- مودال انتخاب حرکت -->
+    @if (_showExerciseSelector)
+    {
+        <div class="modal-overlay">
+            <div class="modal-container modal-lg">
+                <div class="modal-header">
+                    <h3>انتخاب حرکت ورزشی</h3>
+                    <button class="modal-close" @onclick="() => _showExerciseSelector = false">✖</button>
+                </div>
+                <div class="modal-body">
+                    <ExerciseSelector OnExerciseSelected="OnExerciseSelectedHandler" />
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- مودال ویرایش حرکت -->
+    @if (_showEditDialog)
+    {
+        <div class="modal-overlay">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <h3>✏️ ویرایش حرکت</h3>
+                    <button class="modal-close" @onclick="CloseEditDialog">✖</button>
+                </div>
+                <div class="modal-body">
+                    <div class="edit-field">
+                        <label>تعداد ست</label>
+                        <input type="number" @bind="_editSets" class="modern-input" min="1" max="10" />
+                    </div>
+                    <div class="edit-field">
+                        <label>تعداد تکرار</label>
+                        <input type="text" @bind="_editReps" class="modern-input" placeholder="مثلاً: 8-12" />
+                    </div>
+                    <div class="edit-field">
+                        <label>استراحت (ثانیه)</label>
+                        <input type="number" @bind="_editRestSeconds" class="modern-input" min="30" max="180" step="15" />
+                    </div>
+                    <div class="edit-field">
+                        <label>توضیح مربی (اختیاری)</label>
+                        <textarea @bind="_editTrainerNote" class="modern-textarea" rows="3" placeholder="نکته خاصی برای این حرکت دارید؟"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel" @onclick="CloseEditDialog">انصراف</button>
+                    <button class="btn-save" @onclick="SaveExerciseEdit">ذخیره تغییرات</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    .create-workout-container {
+        min-height: 100vh;
+        background: #1a1a2e;
+        padding: 16px;
+    }
+    
+    /* هدر */
+    .page-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    
+    .back-btn {
+        background: #0f0f1a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 10px 18px;
+        border-radius: 12px;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: white;
+        transition: all 0.2s;
+    }
+    
+    .back-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .page-header h2 {
+        font-size: 20px;
+        color: white;
+        font-weight: 500;
+    }
+    
+    /* کارت اطلاعات */
+    .info-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+        color: white;
+    }
+    
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        font-weight: 500;
+        opacity: 0.9;
+    }
+    
+    .info-value {
+        font-weight: 600;
+    }
+    
+    /* کارت تنظیمات */
+    .settings-card {
+        background: #0f0f1a;
+        border-radius: 20px;
+        padding: 16px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .card-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        color: white;
+    }
+    
+    .settings-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    @@media (min-width: 768px) {
+        .settings-grid {
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+        .setting-item {
+            flex: 1;
+        }
+        .setting-item.full-width {
+            flex: 100%;
+        }
+    }
+    
+    .setting-label {
+        display: block;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 6px;
+    }
+    
+    .modern-input, .modern-select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        font-size: 14px;
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+    
+    .modern-input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    .modern-select option {
+        background: #0f0f1a;
+    }
+    
+    .days-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .day-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 8px 14px;
+        border-radius: 30px;
+        font-size: 13px;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .day-checkbox input {
+        margin: 0;
+    }
+    
+    /* بخش اصلی */
+    .main-workout-row {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    @@media (min-width: 768px) {
+        .main-workout-row {
+            flex-direction: row;
+            align-items: flex-start;
+        }
+        .days-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+        }
+        .exercises-content {
+            flex: 1;
+        }
+    }
+    
+    /* سایدبار روزها */
+    .days-sidebar {
+        background: #0f0f1a;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .sidebar-title {
+        background: rgba(255, 255, 255, 0.03);
+        padding: 14px 16px;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        color: white;
+    }
+    
+    .days-list {
+        padding: 8px;
+    }
+    
+    .day-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        margin-bottom: 6px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .day-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .day-item.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .day-name {
+        font-weight: 500;
+    }
+    
+    .day-count {
+        background: rgba(0,0,0,0.1);
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 12px;
+    }
+    
+    .day-item.active .day-count {
+        background: rgba(255,255,255,0.3);
+    }
+    
+    /* کارت حرکات */
+    .exercises-card {
+        background: #0f0f1a;
+        border-radius: 20px;
+        overflow: hidden;
+        margin-bottom: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .exercises-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        flex-wrap: wrap;
+        gap: 10px;
+        color: white;
+    }
+    
+    .add-exercise-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 25px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+    
+    .exercises-list {
+        padding: 12px;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .exercise-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .exercise-info {
+        display: flex;
+        gap: 12px;
+        flex: 1;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .exercise-thumb {
+        width: 65px;
+        height: 65px;
+        background: #1a1a2e;
+        border-radius: 12px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    
+    .exercise-thumb-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .exercise-thumb-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 28px;
+    }
+    
+    .exercise-details {
+        flex: 1;
+    }
+    
+    .exercise-name {
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: white;
+    }
+    
+    .exercise-stats {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .exercise-note {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.4);
+        margin-top: 4px;
+    }
+    
+    .exercise-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .action-edit, .action-delete {
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 6px 10px;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+    
+    .action-edit:hover { background: rgba(59, 130, 246, 0.3); }
+    .action-delete:hover { background: rgba(239, 68, 68, 0.3); }
+    
+    /* دکمه‌های ذخیره */
+    .save-actions {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .save-btn, .share-btn {
+        flex: 1;
+        padding: 14px;
+        border: none;
+        border-radius: 14px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .save-btn {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+    }
+    
+    .share-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .save-hint {
+        text-align: center;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+        margin-top: 8px;
+    }
+    
+    /* حالت خالی */
+    .empty-exercises {
+        text-align: center;
+        padding: 40px 20px;
+    }
+    
+    .empty-icon {
+        font-size: 48px;
+        opacity: 0.4;
+        margin-bottom: 12px;
+    }
+    
+    .empty-exercises p {
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    /* خطا */
+    .error-card {
+        background: #0f0f1a;
+        border-radius: 20px;
+        padding: 40px 20px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .error-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    
+    .error-card h3 {
+        color: white;
+        margin-bottom: 16px;
+    }
+    
+    /* مودال */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 16px;
+    }
+    
+    .modal-container {
+        background: #0f0f1a;
+        border-radius: 24px;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .modal-container.modal-lg {
+        max-width: 700px;
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+    
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 16px 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .edit-field {
+        margin-bottom: 16px;
+    }
+    
+    .edit-field label {
+        display: block;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 6px;
+    }
+    
+    .modern-textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+    
+    .btn-cancel {
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 25px;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 25px;
+        cursor: pointer;
+    }
+    
+    .back-btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 30px;
+        margin-top: 20px;
+        cursor: pointer;
+    }
+    
+    /* اسکرول‌بار */
+    .exercises-list::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    .exercises-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+    }
+    
+    .exercises-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+    }
+    
+    @@media (max-width: 480px) {
+        .exercise-thumb {
+            width: 50px;
+            height: 50px;
+        }
+        .exercise-name {
+            font-size: 13px;
+        }
+        .save-btn, .share-btn {
+            padding: 12px;
+            font-size: 13px;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public string? Trainee { get; set; }
+    
+    private string _traineeName = "";
+    private DateTime _startDate = DateTime.Today;
+    private int _weeksCount = 4;
+    private List<string> _weekDays = new();
+    private List<string> _allDays = new() { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+    private string _selectedDay = "";
+    private WorkoutPlan _plan = new();
+    private bool _showExerciseSelector = false;
+    private bool _showEditDialog = false;
+    private bool _isSaving = false;
+    
+    private int _editIndex = -1;
+    private int _editSets = 3;
+    private string _editReps = "10-12";
+    private int _editRestSeconds = 60;
+    private string _editTrainerNote = "";
+    
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        _traineeName = query["trainee"] ?? Trainee ?? "";
+        
+        _weeksCount = 4;
+        _weekDays = new List<string>();
+        _startDate = DateTime.Today;
+        
+        CreateNewPlan();
+        
+        await base.OnInitializedAsync();
+    }
+    
+    private void CreateNewPlan()
+    {
+        _plan = new WorkoutPlan
+        {
+            WorkoutId = Guid.NewGuid().ToString(),
+            TraineeUsername = _traineeName,
+            CreatedBy = AuthService.CurrentUser?.Username ?? "",
+            StartDate = _startDate,
+            Weeks = _weeksCount,
+            WeekDays = _weekDays,
+            Schedule = new Dictionary<string, List<WorkoutDayItem>>(),
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+        
+        foreach (var day in _weekDays)
+        {
+            _plan.Schedule[day] = new List<WorkoutDayItem>();
+        }
+        
+        if (_weekDays.Any())
+        {
+            _selectedDay = _weekDays.First();
+        }
+    }
+    
+    private void UpdatePlanSettings()
+    {
+        _plan.StartDate = _startDate;
+        _plan.Weeks = _weeksCount;
+        _plan.WeekDays = _weekDays;
+        
+        foreach (var day in _weekDays)
+        {
+            if (!_plan.Schedule.ContainsKey(day))
+            {
+                _plan.Schedule[day] = new List<WorkoutDayItem>();
+            }
+        }
+        
+        var daysToRemove = _plan.Schedule.Keys.Where(d => !_weekDays.Contains(d)).ToList();
+        foreach (var day in daysToRemove)
+        {
+            _plan.Schedule.Remove(day);
+        }
+        
+        if (!string.IsNullOrEmpty(_selectedDay) && !_weekDays.Contains(_selectedDay))
+        {
+            _selectedDay = _weekDays.FirstOrDefault() ?? "";
+        }
+        
+        StateHasChanged();
+    }
+    
+    private void ToggleDay(string day, bool isChecked)
+    {
+        if (isChecked)
+        {
+            if (!_weekDays.Contains(day))
+                _weekDays.Add(day);
+        }
+        else
+        {
+            _weekDays.Remove(day);
+        }
+        UpdatePlanSettings();
+    }
+    
+    private void SelectDay(string day)
+    {
+        _selectedDay = day;
+        _showExerciseSelector = false;
+        StateHasChanged();
+    }
+    
+    private async Task OnExerciseSelectedHandler(Exercise exercise)
+    {
+        if (!string.IsNullOrEmpty(_selectedDay))
+        {
+            var item = new WorkoutDayItem
+            {
+                ExerciseId = exercise.ExerciseId,
+                Name = exercise.Name,
+                GifUrl = exercise.GifUrl,
+                Sets = 3,
+                Reps = "10-12",
+                RestSeconds = 60,
+                TrainerNote = null,
+                Instructions = exercise.Instructions
+            };
+            
+            _plan.Schedule[_selectedDay].Add(item);
+            _showExerciseSelector = false;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+    
+    private void EditExercise(int index)
+    {
+        _editIndex = index;
+        var item = _plan.Schedule[_selectedDay][index];
+        _editSets = item.Sets;
+        _editReps = item.Reps;
+        _editRestSeconds = item.RestSeconds;
+        _editTrainerNote = item.TrainerNote ?? "";
+        _showEditDialog = true;
+        StateHasChanged();
+    }
+    
+    private void SaveExerciseEdit()
+    {
+        if (_editIndex >= 0 && _plan.Schedule.ContainsKey(_selectedDay))
+        {
+            var item = _plan.Schedule[_selectedDay][_editIndex];
+            item.Sets = _editSets;
+            item.Reps = _editReps;
+            item.RestSeconds = _editRestSeconds;
+            item.TrainerNote = string.IsNullOrWhiteSpace(_editTrainerNote) ? null : _editTrainerNote;
+        }
+        CloseEditDialog();
+        StateHasChanged();
+    }
+    
+    private void CloseEditDialog()
+    {
+        _showEditDialog = false;
+        _editIndex = -1;
+        StateHasChanged();
+    }
+    
+    private void RemoveExercise(int index)
+    {
+        if (_plan.Schedule.ContainsKey(_selectedDay) && index < _plan.Schedule[_selectedDay].Count)
+        {
+            _plan.Schedule[_selectedDay].RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+    
+    private async Task SaveWorkout()
+    {
+        if (!_weekDays.Any())
+        {
+            await App.Current!.MainPage!.DisplayAlert("خطا", "لطفاً حداقل یک روز تمرین انتخاب کنید", "باشه");
+            return;
+        }
+        
+        _isSaving = true;
+        StateHasChanged();
+        
+        _plan.StartDate = _startDate;
+        
+        var saved = await WorkoutService.SaveWorkoutToDatabaseAsync(_plan);
+        
+        if (saved)
+        {
+            var json = WorkoutService.ExportWorkoutToJson(_plan);
+            var fileName = $"workout_{_plan.TraineeUsername}_{_startDate:yyyyMMdd}_{DateTime.Now:HHmmss}.json";
+            var filePath = Path.Combine(FileSystem.AppDataDirectory, fileName);
+            await File.WriteAllTextAsync(filePath, json);
+            
+            await App.Current!.MainPage!.DisplayAlert("ذخیره شد", 
+                $"برنامه از تاریخ {_startDate:yyyy/MM/dd} برای {_plan.TraineeUsername} ذخیره شد.", "باشه");
+            
+            Navigation.NavigateTo("/trainer/dashboard");
+        }
+        else
+        {
+            await App.Current!.MainPage!.DisplayAlert("خطا", "خطا در ذخیره برنامه", "باشه");
+        }
+        
+        _isSaving = false;
+        StateHasChanged();
+    }
+    
+    private async Task ExportAndShare()
+    {
+        if (!_weekDays.Any())
+        {
+            await App.Current!.MainPage!.DisplayAlert("خطا", "لطفاً حداقل یک روز تمرین انتخاب کنید", "باشه");
+            return;
+        }
+        
+        _isSaving = true;
+        StateHasChanged();
+        
+        _plan.StartDate = _startDate;
+        var json = WorkoutService.ExportWorkoutToJson(_plan);
+        var fileName = $"workout_{_plan.TraineeUsername}_{_startDate:yyyyMMdd}.json";
+        var filePath = Path.Combine(FileSystem.AppDataDirectory, fileName);
+        
+        await File.WriteAllTextAsync(filePath, json);
+        
+        _isSaving = false;
+        StateHasChanged();
+        
+        var result = await App.Current!.MainPage!.DisplayAlert(
+            "✅ فایل ذخیره شد", 
+            $"برنامه با نام '{fileName}' در حافظه گوشی ذخیره شد.\n\nآیا مایل به ارسال فایل هستید؟", 
+            "بله، ارسال کن", 
+            "فقط ذخیره شود");
+        
+        if (result)
+        {
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = $"برنامه تمرینی {_plan.TraineeUsername} - شروع {_startDate:yyyy/MM/dd}",
+                File = new ShareFile(filePath)
+            });
+        }
+        else
+        {
+            await App.Current!.MainPage!.DisplayAlert("اطلاع", $"فایل '{fileName}' در حافظه گوشی ذخیره شد.", "باشه");
+        }
+    }
+    
+    private string GetDayName(string day)
+    {
+        var persianDays = new Dictionary<string, string>
+        {
+            { "Monday", "دوشنبه" }, { "Tuesday", "سه‌شنبه" }, { "Wednesday", "چهارشنبه" },
+            { "Thursday", "پنج‌شنبه" }, { "Friday", "جمعه" }, { "Saturday", "شنبه" }, { "Sunday", "یکشنبه" }
+        };
+        return persianDays.ContainsKey(day) ? persianDays[day] : day;
+    }
+    
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/trainer/dashboard");
+    }
+}

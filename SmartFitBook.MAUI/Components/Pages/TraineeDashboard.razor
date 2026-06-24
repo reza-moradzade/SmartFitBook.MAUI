@@ -1,0 +1,544 @@
+﻿@page "/trainee/dashboard"
+@using SmartFitBook.MAUI.Services
+@using SmartFitBook.MAUI.Models
+@using System.Text.Json
+@inject AuthService AuthService
+@inject WorkoutService WorkoutService
+@inject FileService FileService
+@inject NavigationManager Navigation
+
+<PageTitle>پیشخوان شاگرد | برنامه بدنسازی</PageTitle>
+
+<div class="trainee-container">
+    @if (AuthService.CurrentUser == null)
+    {
+        <div class="empty-state">
+            <div class="empty-icon">🔒</div>
+            <h3>لطفاً ابتدا وارد شوید</h3>
+            <button class="btn-primary-modern" @onclick='() => Navigation.NavigateTo("/login")'>ورود به حساب</button>
+        </div>
+        return;
+    }
+
+    <!-- محتوای اصلی -->
+    <div class="main-content">
+        <!-- کارت ایمپورت -->
+        <div class="import-card">
+            <div class="import-icon">📥</div>
+            <div class="import-info">
+                <h4>دریافت برنامه تمرینی جدید</h4>
+                <p>فایل JSON برنامه را که مربی برای شما ارسال کرده است انتخاب کنید</p>
+            </div>
+            <button class="import-btn" @onclick="ImportWorkout">
+                📂 ایمپورت
+            </button>
+        </div>
+
+        <!-- لیست برنامه‌ها -->
+        <div class="workouts-card">
+            <div class="card-header-modern">
+                <div class="header-icon">📋</div>
+                <h3>برنامه‌های تمرینی من</h3>
+                <span class="badge-count">@_allPlans.Count</span>
+            </div>
+            <div class="card-body-modern">
+                @if (_allPlans.Any())
+                {
+                    <div class="workouts-list">
+                        @foreach (var plan in _allPlans.OrderByDescending(p => p.StartDate))
+                        {
+                            <div class="workout-card">
+                                <div class="workout-header">
+                                    <div class="workout-dates">
+                                        <span class="date-start">📅 @plan.StartDate.ToString("yyyy/MM/dd")</span>
+                                        <span class="date-arrow">→</span>
+                                        <span class="date-end">@plan.StartDate.AddDays((plan.Weeks * 7) - 1).ToString("yyyy/MM/dd")</span>
+                                    </div>
+                                    <div class="workout-status">
+                                        @if (plan.IsActive)
+                                        {
+                                            <span class="status-badge active">فعال</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-badge inactive">غیرفعال</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="workout-details">
+                                    <div class="detail-item">
+                                        <span class="detail-icon">⏱️</span>
+                                        <span>@plan.Weeks هفته</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-icon">📆</span>
+                                        <span>@string.Join(", ", plan.WeekDays.Select(GetDayName))</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-icon">🏋️</span>
+                                        <span>@GetTotalExercisesCount(plan) حرکت</span>
+                                    </div>
+                                </div>
+                                <div class="workout-actions">
+                                    <button class="action-btn view" @onclick="() => ViewWorkout(plan.WorkoutId)" title="مشاهده برنامه">
+                                        🔍 مشاهده
+                                    </button>
+                                    <button class="action-btn delete" @onclick="() => DeleteWorkout(plan.WorkoutId, plan.IsActive)" title="حذف برنامه">
+                                        🗑️ حذف
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-list">
+                        <div class="empty-icon">📭</div>
+                        <p>شما هیچ برنامه تمرینی ندارید</p>
+                        <button class="btn-sm-modern mt-2" @onclick="ImportWorkout">
+                            📥 دریافت اولین برنامه
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .trainee-container {
+        min-height: 100vh;
+        background: #1a1a2e;
+    }
+
+    /* محتوای اصلی */
+    .main-content {
+        padding: 16px;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    /* کارت ایمپورت */
+    .import-card {
+        background: #0f0f1a;
+        border-radius: 20px;
+        padding: 16px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .import-icon {
+        font-size: 40px;
+    }
+
+    .import-info {
+        flex: 1;
+    }
+
+    .import-info h4 {
+        font-size: 15px;
+        color: white;
+        margin-bottom: 4px;
+    }
+
+    .import-info p {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .import-btn {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 30px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .import-btn:active {
+        transform: scale(0.97);
+    }
+
+    /* کارت برنامه‌ها */
+    .workouts-card {
+        background: #0f0f1a;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .card-header-modern {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .header-icon {
+        font-size: 22px;
+    }
+
+    .card-header-modern h3 {
+        flex: 1;
+        font-size: 16px;
+        color: white;
+        font-weight: 500;
+    }
+
+    .badge-count {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+    }
+
+    .card-body-modern {
+        padding: 16px;
+    }
+
+    /* لیست برنامه‌ها */
+    .workouts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .workout-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 14px;
+        transition: all 0.2s;
+    }
+
+    .workout-card:hover {
+        transform: translateX(-3px);
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .workout-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .workout-dates {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .date-start, .date-end {
+        font-weight: 600;
+        color: white;
+    }
+
+    .date-arrow {
+        color: rgba(255, 255, 255, 0.3);
+    }
+
+    .status-badge {
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .status-badge.active {
+        background: #10b981;
+        color: white;
+    }
+
+    .status-badge.inactive {
+        background: #6b7280;
+        color: white;
+    }
+
+    .workout-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .detail-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .detail-icon {
+        font-size: 13px;
+    }
+
+    .workout-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+
+    .action-btn {
+        padding: 6px 14px;
+        border: none;
+        border-radius: 25px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .action-btn.view {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+    }
+
+    .action-btn.view:hover {
+        background: rgba(59, 130, 246, 0.3);
+    }
+
+    .action-btn.delete {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+    }
+
+    .action-btn.delete:hover {
+        background: rgba(239, 68, 68, 0.3);
+    }
+
+    .action-btn:hover {
+        transform: scale(1.02);
+    }
+
+    /* دکمه‌ها */
+    .btn-primary-modern {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 30px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 16px;
+    }
+
+    .btn-sm-modern {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 25px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    /* حالت خالی */
+    .empty-list {
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .empty-list .empty-icon {
+        font-size: 48px;
+        opacity: 0.4;
+        margin-bottom: 12px;
+    }
+
+    .empty-list p {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 14px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 50px 20px;
+    }
+
+    .empty-state .empty-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+
+    /* ریسپانسیو */
+    @@media (max-width: 480px) {
+        .main-content {
+            padding: 12px;
+        }
+
+        .import-card {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .import-info h4 {
+            font-size: 14px;
+        }
+
+        .workout-dates {
+            font-size: 11px;
+        }
+
+        .date-start, .date-end {
+            font-size: 11px;
+        }
+
+        .detail-item {
+            font-size: 11px;
+        }
+
+        .action-btn {
+            padding: 5px 12px;
+            font-size: 11px;
+        }
+    }
+
+    @@media (min-width: 768px) {
+        .main-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+    }
+</style>
+
+@code {
+    private List<WorkoutPlan> _allPlans = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPlans();
+    }
+
+    private async Task LoadPlans()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        var username = AuthService.CurrentUser?.Username;
+        if (string.IsNullOrEmpty(username)) return;
+
+        _allPlans = await WorkoutService.GetWorkoutsByTraineeAsync(username, false);
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private int GetTotalExercisesCount(WorkoutPlan plan)
+    {
+        if (plan.Schedule == null) return 0;
+        return plan.Schedule.Values.Sum(day => day.Count);
+    }
+
+    private async Task ImportWorkout()
+    {
+        var jsonContent = await FileService.PickJsonFileAsync();
+        if (!string.IsNullOrEmpty(jsonContent))
+        {
+            var plan = await WorkoutService.ImportWorkoutFromJsonAsync(jsonContent);
+            if (plan != null && plan.TraineeUsername == AuthService.CurrentUser!.Username)
+            {
+                var existingPlan = _allPlans.FirstOrDefault(p =>
+                    p.StartDate.Date == plan.StartDate.Date &&
+                    p.Weeks == plan.Weeks);
+
+                if (existingPlan != null)
+                {
+                    var overwrite = await App.Current!.MainPage!.DisplayAlert(
+                        "تکرار برنامه",
+                        $"برنامه‌ای با تاریخ شروع {plan.StartDate:yyyy/MM/dd} قبلاً ثبت شده است. آیا می‌خواهید جایگزین شود؟",
+                        "بله، جایگزین کن",
+                        "خیر");
+
+                    if (!overwrite) return;
+                    await WorkoutService.DeleteWorkoutAsync(existingPlan.WorkoutId);
+                }
+
+                var activePlan = _allPlans.FirstOrDefault(p => p.IsActive);
+                if (activePlan != null)
+                {
+                    await WorkoutService.DeactivateWorkoutAsync(activePlan.WorkoutId);
+                }
+
+                plan.IsActive = true;
+                plan.WorkoutId = Guid.NewGuid().ToString();
+                plan.CreatedAt = DateTime.UtcNow;
+
+                await WorkoutService.SaveWorkoutToDatabaseAsync(plan);
+
+                await LoadPlans();
+                await App.Current!.MainPage!.DisplayAlert("موفق", "برنامه با موفقیت ایمپورت شد", "باشه");
+            }
+            else
+            {
+                await App.Current!.MainPage!.DisplayAlert("خطا", "فایل برنامه معتبر نیست یا متعلق به شما نمی‌باشد", "باشه");
+            }
+        }
+    }
+
+    private async Task DeleteWorkout(string workoutId, bool isActive)
+    {
+        var message = isActive
+            ? "⚠️ این برنامه فعال است. آیا از حذف آن اطمینان دارید؟"
+            : "آیا از حذف این برنامه اطمینان دارید؟";
+
+        var confirm = await App.Current!.MainPage!.DisplayAlert("تأیید حذف", message, "بله، حذف کن", "انصراف");
+
+        if (confirm)
+        {
+            var success = await WorkoutService.DeleteWorkoutAsync(workoutId);
+            if (success)
+            {
+                await LoadPlans();
+                await App.Current!.MainPage!.DisplayAlert("حذف شد", "برنامه با موفقیت حذف شد", "باشه");
+            }
+            else
+            {
+                await App.Current!.MainPage!.DisplayAlert("خطا", "خطا در حذف برنامه", "باشه");
+            }
+        }
+    }
+
+    private void ViewWorkout(string workoutId)
+    {
+        Navigation.NavigateTo($"/trainee/view-workout/{workoutId}");
+    }
+
+    private async void Logout()
+    {
+        AuthService.Logout();
+        Navigation.NavigateTo("/login");
+    }
+
+    private string GetDayName(string day)
+    {
+        var persianDays = new Dictionary<string, string>
+        {
+            { "Monday", "دوشنبه" }, { "Tuesday", "سه‌شنبه" }, { "Wednesday", "چهارشنبه" },
+            { "Thursday", "پنج‌شنبه" }, { "Friday", "جمعه" }, { "Saturday", "شنبه" }, { "Sunday", "یکشنبه" }
+        };
+        return persianDays.ContainsKey(day) ? persianDays[day] : day;
+    }
+}

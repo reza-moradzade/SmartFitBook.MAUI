@@ -1,0 +1,13 @@
+﻿@namespace SmartFitBook.MAUI.Components
+
+<Router AppAssembly="typeof(SmartFitBook.MAUI.App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(Layout.MainLayout)">
+            <p role="alert">صفحه مورد نظر یافت نشد</p>
+        </LayoutView>
+    </NotFound>
+</Router>

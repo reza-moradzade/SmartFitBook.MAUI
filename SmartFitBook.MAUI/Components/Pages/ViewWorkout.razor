@@ -1,0 +1,735 @@
+﻿@page "/trainee/view-workout/{WorkoutId}"
+@using SmartFitBook.MAUI.Models
+@using SmartFitBook.MAUI.Services
+@inject WorkoutService WorkoutService
+@inject NavigationManager Navigation
+@inject AuthService AuthService
+
+<PageTitle>برنامه تمرینی | برنامه بدنسازی</PageTitle>
+
+<div class="view-workout-container">
+    <!-- هدر -->
+    <div class="page-header">
+        <button class="back-btn" @onclick="GoBack">
+            <span>←</span> بازگشت
+        </button>
+        <h2>📋 برنامه تمرینی</h2>
+    </div>
+
+    @if (_plan != null)
+    {
+        <!-- کارت اطلاعات برنامه -->
+        <div class="info-card">
+            <div class="info-header">
+                <span class="info-icon">📊</span>
+                <span>اطلاعات برنامه</span>
+            </div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">👤 شاگرد:</span>
+                    <span class="info-value">@_plan.TraineeUsername</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">📅 تاریخ شروع:</span>
+                    <span class="info-value">@_plan.StartDate.ToString("yyyy/MM/dd")</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">⏱️ مدت:</span>
+                    <span class="info-value">@_plan.Weeks هفته</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">📆 روزهای تمرین:</span>
+                    <span class="info-value">@string.Join(", ", _plan.WeekDays.Select(GetDayName))</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">🏷️ وضعیت:</span>
+                    <span class="status-badge @(_plan.IsActive ? "active" : "inactive")">
+                        @(_plan.IsActive ? "فعال" : "غیرفعال")
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- روزهای تمرین -->
+        @foreach (var weekDay in _plan.WeekDays)
+        {
+            <div class="workout-day-card">
+                <div class="day-header">
+                    <span class="day-icon">📅</span>
+                    <span class="day-name">@GetDayName(weekDay)</span>
+                    @if (_plan.Schedule.ContainsKey(weekDay) && _plan.Schedule[weekDay].Any())
+                    {
+                        <span class="day-count">@_plan.Schedule[weekDay].Count حرکت</span>
+                    }
+                </div>
+                <div class="day-body">
+                    @if (_plan.Schedule.ContainsKey(weekDay) && _plan.Schedule[weekDay].Any())
+                    {
+                        @foreach (var item in _plan.Schedule[weekDay])
+                        {
+                            var gifFileName = !string.IsNullOrEmpty(item.GifUrl) ? System.IO.Path.GetFileName(item.GifUrl) : "";
+                            
+                            <div class="exercise-item" @onclick="() => ShowExerciseDetails(item)">
+                                <div class="exercise-thumb">
+                                    @if (!string.IsNullOrEmpty(gifFileName))
+                                    {
+                                        <img class="exercise-img" 
+                                             src="@($"media/{gifFileName}")" 
+                                             alt="@item.Name"
+                                             loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <div class="exercise-placeholder">🏋️</div>
+                                    }
+                                </div>
+                                <div class="exercise-info">
+                                    <div class="exercise-name">@item.Name</div>
+                                    <div class="exercise-stats">
+                                        @item.Sets ست × @item.Reps تکرار | استراحت: @item.RestSeconds ثانیه
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(item.TrainerNote))
+                                    {
+                                        <div class="exercise-note">📝 @item.TrainerNote</div>
+                                    }
+                                </div>
+                                <div class="exercise-detail-btn">
+                                    <button class="detail-btn">🔍</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="empty-day">
+                            <span>📭</span>
+                            <p>حرکتی برای این روز ثبت نشده است</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+    else if (!_isLoading)
+    {
+        <div class="error-card">
+            <div class="error-icon">⚠️</div>
+            <h3>برنامه تمرینی یافت نشد</h3>
+            <button class="back-btn-primary" @onclick="GoBack">بازگشت</button>
+        </div>
+    }
+
+    <!-- مودال جزئیات حرکت -->
+    @if (_showDetails && _selectedItem != null)
+    {
+        var detailGifFileName = !string.IsNullOrEmpty(_selectedItem.GifUrl) ? System.IO.Path.GetFileName(_selectedItem.GifUrl) : "";
+        
+        <div class="modal-overlay" @onclick="CloseDetails">
+            <div class="modal-container" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h3>@_selectedItem.Name</h3>
+                    <button class="modal-close" @onclick="CloseDetails">✖</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-media">
+                        @if (!string.IsNullOrEmpty(detailGifFileName))
+                        {
+                            <img class="modal-gif" 
+                                 src="@($"media/{detailGifFileName}")" 
+                                 alt="@_selectedItem.Name" />
+                        }
+                        else
+                        {
+                            <div class="modal-placeholder">🏋️</div>
+                        }
+                    </div>
+                    
+                    <div class="modal-info">
+                        <div class="modal-row">
+                            <span class="modal-label">📊 ست:</span>
+                            <span class="modal-value">@_selectedItem.Sets</span>
+                        </div>
+                        <div class="modal-row">
+                            <span class="modal-label">🔁 تکرار:</span>
+                            <span class="modal-value">@_selectedItem.Reps</span>
+                        </div>
+                        <div class="modal-row">
+                            <span class="modal-label">⏱️ استراحت:</span>
+                            <span class="modal-value">@_selectedItem.RestSeconds ثانیه</span>
+                        </div>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(_selectedItem.TrainerNote))
+                    {
+                        <div class="trainer-note">
+                            <div class="note-title">📝 نکته مربی</div>
+                            <div class="note-text">@_selectedItem.TrainerNote</div>
+                        </div>
+                    }
+                    
+                    <div class="instructions">
+                        <div class="instructions-title">📖 دستورالعمل</div>
+                        <ol class="instructions-list">
+                            @foreach (var instruction in _selectedItem.Instructions)
+                            {
+                                <li>@instruction</li>
+                            }
+                        </ol>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="close-btn" @onclick="CloseDetails">بستن</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    .view-workout-container {
+        min-height: 100vh;
+        background: #1a1a2e;
+        padding: 16px;
+    }
+    
+    /* هدر */
+    .page-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    
+    .back-btn {
+        background: #0f0f1a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 10px 18px;
+        border-radius: 12px;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: white;
+        transition: all 0.2s;
+    }
+    
+    .back-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .page-header h2 {
+        font-size: 20px;
+        color: white;
+        font-weight: 500;
+    }
+    
+    /* کارت اطلاعات */
+    .info-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+        color: white;
+    }
+    
+    .info-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .info-icon {
+        font-size: 18px;
+    }
+    
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+    }
+    
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .info-label {
+        font-size: 13px;
+        opacity: 0.8;
+    }
+    
+    .info-value {
+        font-weight: 600;
+        font-size: 13px;
+    }
+    
+    .status-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .status-badge.active {
+        background: #10b981;
+        color: white;
+    }
+    
+    .status-badge.inactive {
+        background: #6b7280;
+        color: white;
+    }
+    
+    /* کارت روز تمرین */
+    .workout-day-card {
+        background: #0f0f1a;
+        border-radius: 20px;
+        overflow: hidden;
+        margin-bottom: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .day-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .day-icon {
+        font-size: 18px;
+    }
+    
+    .day-name {
+        font-weight: 600;
+        color: white;
+        flex: 1;
+    }
+    
+    .day-count {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.7);
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    
+    .day-body {
+        padding: 12px;
+    }
+    
+    /* آیتم حرکت */
+    .exercise-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 14px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .exercise-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .exercise-thumb {
+        width: 65px;
+        height: 65px;
+        background: #1a1a2e;
+        border-radius: 12px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    
+    .exercise-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .exercise-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 28px;
+    }
+    
+    .exercise-info {
+        flex: 1;
+    }
+    
+    .exercise-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: white;
+        margin-bottom: 4px;
+    }
+    
+    .exercise-stats {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .exercise-note {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.4);
+        margin-top: 4px;
+    }
+    
+    .exercise-detail-btn {
+        flex-shrink: 0;
+    }
+    
+    .detail-btn {
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 8px 12px;
+        border-radius: 30px;
+        transition: all 0.2s;
+        color: white;
+    }
+    
+    .detail-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* روز خالی */
+    .empty-day {
+        text-align: center;
+        padding: 30px 20px;
+    }
+    
+    .empty-day span {
+        font-size: 36px;
+        opacity: 0.4;
+    }
+    
+    .empty-day p {
+        margin-top: 8px;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 13px;
+    }
+    
+    /* مودال */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 16px;
+    }
+    
+    .modal-container {
+        background: #0f0f1a;
+        border-radius: 24px;
+        max-width: 500px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .modal-header h3 {
+        font-size: 18px;
+        color: white;
+    }
+    
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 4px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .modal-close:hover {
+        color: white;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .modal-media {
+        width: 100%;
+        height: 200px;
+        background: #1a1a2e;
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+    
+    .modal-gif {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    
+    .modal-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 64px;
+    }
+    
+    .modal-info {
+        display: flex;
+        justify-content: space-around;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 14px;
+        border-radius: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .modal-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .modal-label {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .modal-value {
+        font-weight: 700;
+        font-size: 15px;
+        color: white;
+    }
+    
+    .trainer-note {
+        background: rgba(245, 158, 11, 0.15);
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    
+    .note-title {
+        font-weight: 700;
+        font-size: 13px;
+        color: #fbbf24;
+        margin-bottom: 6px;
+    }
+    
+    .note-text {
+        font-size: 13px;
+        color: #fcd34d;
+    }
+    
+    .instructions {
+        margin-bottom: 16px;
+    }
+    
+    .instructions-title {
+        font-weight: 700;
+        font-size: 14px;
+        color: white;
+        margin-bottom: 10px;
+    }
+    
+    .instructions-list {
+        padding-right: 20px;
+        margin: 0;
+    }
+    
+    .instructions-list li {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.7);
+        margin-bottom: 8px;
+        line-height: 1.5;
+    }
+    
+    .modal-footer {
+        padding: 16px 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    .close-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 30px;
+        font-size: 14px;
+        cursor: pointer;
+    }
+    
+    .close-btn:hover {
+        opacity: 0.9;
+    }
+    
+    /* خطا */
+    .error-card {
+        background: #0f0f1a;
+        border-radius: 20px;
+        padding: 40px 20px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .error-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    
+    .error-card h3 {
+        color: white;
+        margin-bottom: 16px;
+    }
+    
+    .back-btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 30px;
+        margin-top: 20px;
+        cursor: pointer;
+    }
+    
+    /* ریسپانسیو */
+    @@media (max-width: 480px) {
+        .view-workout-container {
+            padding: 12px;
+        }
+        
+        .exercise-thumb {
+            width: 55px;
+            height: 55px;
+        }
+        
+        .exercise-name {
+            font-size: 13px;
+        }
+        
+        .exercise-stats {
+            font-size: 11px;
+        }
+        
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .modal-media {
+            height: 180px;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public string WorkoutId { get; set; } = string.Empty;
+    [Parameter] public string? ReturnUrl { get; set; }
+
+    private WorkoutPlan? _plan;
+    private bool _isLoading = true;
+    private bool _showDetails = false;
+    private WorkoutDayItem? _selectedItem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkout();
+    }
+
+    private async Task LoadWorkout()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        _plan = await WorkoutService.GetWorkoutByIdAsync(WorkoutId);
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private void ShowExerciseDetails(WorkoutDayItem item)
+    {
+        _selectedItem = item;
+        _showDetails = true;
+        StateHasChanged();
+    }
+
+    private void CloseDetails()
+    {
+        _showDetails = false;
+        _selectedItem = null;
+        StateHasChanged();
+    }
+
+    private void GoBack()
+    {
+        if (!string.IsNullOrEmpty(ReturnUrl))
+        {
+            Navigation.NavigateTo(ReturnUrl);
+        }
+        else if (AuthService.IsTrainer)
+        {
+            Navigation.NavigateTo("/trainer/dashboard");
+        }
+        else
+        {
+            Navigation.NavigateTo("/trainee/dashboard");
+        }
+    }
+
+    private string GetDayName(string day)
+    {
+        var persianDays = new Dictionary<string, string>
+        {
+            { "Monday", "دوشنبه" }, { "Tuesday", "سه‌شنبه" }, { "Wednesday", "چهارشنبه" },
+            { "Thursday", "پنج‌شنبه" }, { "Friday", "جمعه" }, { "Saturday", "شنبه" }, { "Sunday", "یکشنبه" }
+        };
+        return persianDays.ContainsKey(day) ? persianDays[day] : day;
+    }
+}

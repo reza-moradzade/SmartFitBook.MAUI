@@ -1,0 +1,312 @@
+﻿@page "/login"
+@using SmartFitBook.MAUI.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>ورود | برنامه بدنسازی</PageTitle>
+
+<div class="login-container">
+    <div class="login-card glass-card">
+        <div class="login-header">
+            <div class="login-logo">
+                <img src="images/Bodybuilder.png" alt="SmartFitBook" class="logo-image" />
+            </div>
+            <h1 class="login-title">ورود اعضا</h1>
+            <p class="login-subtitle">به برنامه مدیریت تمرینات خوش آمدید</p>
+        </div>
+
+        <div class="login-body">
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="alert alert-danger">
+                    <span>⚠️</span> @_errorMessage
+                </div>
+            }
+
+            <div class="input-group">
+                <input type="text"
+                       @bind="_username"
+                       @bind:event="oninput"
+                       class="login-input"
+                       placeholder="ایمیل یا نام کاربری" />
+            </div>
+
+            <div class="input-group">
+                <input type="password"
+                       @bind="_password"
+                       @bind:event="oninput"
+                       class="login-input"
+                       placeholder="رمز عبور"
+                       @onkeypress="OnKeyPress" />
+            </div>
+
+            <button class="login-btn" @onclick="LoginAsync" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span>⏳ در حال ورود...</span>
+                }
+                else
+                {
+                    <span>ورود</span>
+                }
+            </button>
+
+            <div class="login-links">
+                <a href="#" class="forgot-link">رمز عبور خود را فراموش کرده‌ام</a>
+            </div>
+
+            <div class="login-footer">
+                <p>نسخه 1.0.0</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .login-container {
+        min-height: 100vh;
+        background-image: url('images/gym-background.jpg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        position: relative;
+    }
+
+    /* لایه تیره روی تصویر برای خوانایی بهتر */
+    .login-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+    }
+
+    /* کارد شیشه‌ای */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(12px);
+        border-radius: 24px;
+        padding: 48px 40px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        position: relative;
+        z-index: 10;
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+
+    .login-logo {
+        margin-bottom: 24px;
+    }
+
+    .logo-image {
+        width: 80px;
+        height: 80px;
+        object-fit: contain;
+        filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+    }
+
+    .login-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: white;
+        margin-bottom: 8px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .login-subtitle {
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .login-body {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .input-group {
+        position: relative;
+    }
+
+    .login-input {
+        width: 100%;
+        padding: 14px 16px;
+        font-size: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.1);
+        transition: all 0.2s ease;
+        direction: rtl;
+        color: white;
+    }
+
+    .login-input:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.6);
+        background: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    }
+
+    .login-input::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 14px;
+    }
+
+    .login-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 14px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .login-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .login-btn:active {
+        transform: translateY(0);
+    }
+
+    .login-btn:disabled {
+        opacity: 0.7;
+        transform: none;
+        cursor: not-allowed;
+    }
+
+    .login-links {
+        text-align: center;
+        margin-top: 8px;
+    }
+
+    .forgot-link {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.8);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+
+    .forgot-link:hover {
+        color: white;
+        text-decoration: underline;
+    }
+
+    .login-footer {
+        text-align: center;
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background-color: rgba(220, 38, 38, 0.9);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* ریسپانسیو */
+    @@media (max-width: 480px) {
+        .glass-card {
+            padding: 32px 24px;
+        }
+
+        .logo-image {
+            width: 60px;
+            height: 60px;
+        }
+
+        .login-title {
+            font-size: 24px;
+        }
+
+        .login-input {
+            padding: 12px 14px;
+            font-size: 14px;
+        }
+
+        .login-btn {
+            padding: 12px;
+            font-size: 15px;
+        }
+    }
+</style>
+
+@code {
+    private string _username = "";
+    private string _password = "";
+    private string _errorMessage = "";
+    private bool _isLoading = false;
+
+    private async Task LoginAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "لطفاً نام کاربری و رمز عبور را وارد کنید";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = "";
+        StateHasChanged();
+
+        var success = await AuthService.LoginAsync(_username, _password);
+
+        if (success)
+        {
+            if (AuthService.IsTrainer)
+                Navigation.NavigateTo("/trainer/dashboard");
+            else
+                Navigation.NavigateTo("/trainee/dashboard");
+        }
+        else
+        {
+            _errorMessage = "نام کاربری یا رمز عبور اشتباه است";
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            LoginAsync();
+        }
+    }
+}
